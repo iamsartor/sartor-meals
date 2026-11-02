@@ -218,26 +218,28 @@
       const row = rows.find((p) => p.slot === 'main') || rows[0];
       const r = row && recipe(row.recipe_id);
       const isToday = date === today() ? ' today' : '';
-      if (!r) {
-        tiles.push(`<a class="tile empty${isToday}" href="#/tag/${date}"><span class="day">${dayShort(date)} ${parse(date).getDate()}.</span><span class="meal">Noch offen</span><span class="tag">antippen zum Planen</span></a>`);
-      } else {
-        const extra = rows.length > 1 ? ' + Abendbrot' : '';
-        tiles.push(`<a class="tile ${mealClass(row, r)}${isToday}" href="#/tag/${date}"><span class="day">${dayShort(date)} ${parse(date).getDate()}.</span><span class="meal">${esc(r.name)}</span><span class="tag">${esc(mealLabel(row, r))}${extra}</span></a>`);
-      }
+      const span = ['s4 wide-big', 's2', 's2', 's4 wide-big', 's6', 's4 wide-big', 's2'][i];
+      const cls = r ? mealClass(row, r) : 'empty';
+      const name = r ? esc(r.name) : 'Noch offen';
+      const tag = r ? esc(mealLabel(row, r)) + (rows.length > 1 ? ' + Abendbrot' : '') : 'antippen zum Planen';
+      const day = `${dayShort(date)} ${parse(date).getDate()}.`;
+      tiles.push(span === 's6'
+        ? `<a class="tile ${cls} s6${isToday}" href="#/tag/${date}"><span class="day">${day}</span><span class="body"><span class="meal">${name}</span><span class="tag">${tag}</span></span></a>`
+        : `<a class="tile ${cls} ${span}${isToday}" href="#/tag/${date}"><span class="day">${day}</span><span class="meal">${name}</span><span class="tag">${tag}</span></a>`);
     }
     const fridge = T('Fertig').filter((f) => num(f.portions_left) > 0);
     const fridgeText = fridge.length ? fridge.slice(0, 3).map((f) => `${num(f.portions_left)} ${esc(f.item)}`).join(', ') : 'Gerade leer';
-    tiles.push(`<a class="tile b-bites" href="#/kuehlschrank"><span class="day">Im Kühlschrank</span><span class="meal">${fridgeText}</span><span class="tag">für schnelle Mittage</span></a>`);
+    tiles.push(`<a class="tile b-bites s6 fridge" href="#/kuehlschrank"><span class="day">Im Kühlschrank</span><span class="meal">${fridgeText}</span><span class="tag">für schnelle Mittage</span></a>`);
     return `${banner()}
-      <section class="block big b-brand">
+      <section class="block big b-brand hero">
         <div class="row" style="justify-content:space-between">${weekSwitch().replace(/class="eyebrow"/, 'class="eyebrow" style="color:#fff"').replace(/round sm ghost/g, 'round sm')}</div>
-        <h1>${state.weekOffset === 0 ? 'Diese Woche' : state.weekOffset === 1 ? 'Nächste Woche' : 'Woche ' + fmt(ws)}</h1>
+        <h1 class="huge">${state.weekOffset === 0 ? 'Diese Woche' : state.weekOffset === 1 ? 'Nächste Woche' : 'Woche ' + fmt(ws)}</h1>
         <div class="hero-row">
-          <p style="margin:0;font-size:15px;line-height:22px;font-weight:500">${prepNames.length ? `${setting('prep_day', 'Sonntag')} ${fmt(prep)} vorkochen${prepMin ? `, ca. ${Math.round(prepMin / 15) * 15} Min` : ''}:<br>${esc(prepNames.join(', '))}` : 'Für diese Woche ist noch nichts zum Vorkochen geplant. Sag Claude im Chat „Plan die Woche“.'}</p>
+          <p style="margin:0;font-size:15px;line-height:22px;font-weight:500">${prepNames.length ? `<b>${setting('prep_day', 'Sonntag')}, ${fmt(prep)} vorkochen</b><br>${esc(prepNames.join(', '))}${prepMin ? `<br><span class="small">ca. ${Math.round(prepMin / 15) * 15} Min aktiv</span>` : ''}` : 'Für diese Woche ist noch nichts zum Vorkochen geplant. Sag Claude im Chat „Plan die Woche“.'}</p>
           ${prepNames.length ? `<a class="round" href="#/vorkochen/${prep}" aria-label="Vorkoch-Plan ansehen">${I.next}</a>` : ''}
         </div>
       </section>
-      <div class="grid2">${tiles.join('')}</div>
+      <div class="grid6">${tiles.join('')}</div>
       <div class="row" style="justify-content:center"><a class="textbtn" href="#/einstellungen">${state.person ? esc(state.person) + ' · ' : ''}Einstellungen</a></div>
       ${nav('woche')}`;
   }
@@ -294,7 +296,7 @@
 
   function vWer() {
     const people = T('Familie').map((f) => f.person).filter(Boolean);
-    return `<div class="head"><h1>Wer bist du?</h1><p class="eyebrow">Einmal antippen, die App merkt es sich auf diesem Handy.</p></div>
+    return `<div class="head" style="--accent:var(--block-wish)"><h1>Wer bist du?</h1><p class="eyebrow">Einmal antippen, die App merkt es sich auf diesem Handy.</p></div>
       <div class="grid2">${people.map((p, i) => `<button class="tile ${['b-prep', 'b-abendbrot', 'b-wish', 'b-new', 'b-bites', 'b-warm'][i % 6]}" data-act="person" data-p="${esc(p)}"><span class="day">&nbsp;</span><span class="meal" style="font-size:22px">${esc(p)}</span><span class="tag">&nbsp;</span></button>`).join('')}</div>
       <p class="small muted center">Namen ändern: in der Tabelle im Tab „Familie“, oder Claude im Chat fragen.</p>${nav('lieber')}`;
   }
@@ -323,7 +325,7 @@
       const a = recipe(q.option_a), b = recipe(q.option_b);
       const when = q.for_date === 'bites' ? 'Für den Kühlschrank' : `Für ${dayLong(q.for_date)}`;
       const meta = (r) => r ? `${esc(r.total_min)} Min${r.category === 'bite' ? ', zum Mitnehmen' : ''}` : '';
-      main = `<div class="head"><div class="head-row"><a class="textbtn" href="#/wer" style="padding:0">${esc(state.person)}</a><span class="eyebrow">Frage ${qs.length - open.length + 1} von ${qs.length}</span></div>
+      main = `<div class="head" style="--accent:var(--block-abendbrot)"><div class="head-row"><a class="textbtn" href="#/wer" style="padding:0">${esc(state.person)}</a><span class="eyebrow">Frage ${qs.length - open.length + 1} von ${qs.length}</span></div>
         <h1>Was hättest du lieber?</h1><p class="eyebrow">${when}</p></div>
         <div class="choice">
           <button class="opt b-warm" data-act="answer" data-q="${q.id}" data-c="a"><span class="t">${esc(a ? a.name : q.option_a)}</span><span class="soft">${meta(a)}</span></button>
@@ -353,13 +355,13 @@
     const groups = SECTIONS.concat([...new Set(items.map((i) => i.section))].filter((s) => !SECTIONS.includes(s))).map((sec) => {
       const its = items.filter((i) => (i.section || 'Sonstiges') === sec);
       if (!its.length) return '';
-      return `<section class="block ${SECTION_BLOCK[sec] || 'b-plain'}"><h2 style="font-size:14px;line-height:20px">${esc(sec)}</h2>
+      return `<section class="block sec ${SECTION_BLOCK[sec] || 'b-plain'}"><h2 style="font-size:14px;line-height:20px">${esc(sec)}</h2>
         ${its.map((i) => `<label class="check${yes(i.checked) ? ' done' : ''}"><input type="checkbox" data-act="tick" data-id="${esc(i.id)}"${yes(i.checked) ? ' checked' : ''}><span class="grow name">${esc(i.item)}</span><span class="q">${esc([i.qty, i.unit].filter(Boolean).join(' '))}</span></label>`).join('')}
       </section>`;
     }).join('');
     const staples = T('Vorrat');
     const open = items.filter((i) => !yes(i.checked)).length;
-    return `${banner()}<div class="head"><div class="head-row">${weekSwitch()}</div><h1>Einkauf</h1><p class="eyebrow">${items.length ? `${open} von ${items.length} offen` : 'Noch keine Liste für diese Woche'}</p></div>
+    return `${banner()}<div class="head" style="--accent:var(--block-new)"><div class="head-row">${weekSwitch()}</div><h1>Einkauf</h1><p class="eyebrow">${items.length ? `${open} von ${items.length} offen` : 'Noch keine Liste für diese Woche'}</p></div>
       ${hasPlan ? '' : `<section class="block big b-brand"><h2>Liste aus dem Plan erstellen</h2><p style="margin:0">Alles für die geplanten Gerichte und den Vorkochtag, ohne das, was im Vorrat ist.</p><button class="btn white" data-act="gen" style="align-self:flex-start;margin-top:6px">Erstellen</button></section>`}
       ${groups}
       <form class="row" data-act="add"><input class="field grow" id="additem" placeholder="Noch etwas dazu, z. B. Kaffee" autocomplete="off"><button class="round ink" type="submit" aria-label="Hinzufügen">${I.plus}</button></form>
@@ -377,7 +379,7 @@
       if (!rs.length) return '';
       return `<section class="block b-plain"><h2>${label}</h2>${rs.map((r) => `<a class="list-item" href="#/rezept/${r.id}"><span class="dot ${mealClass(null, r)}"></span><span class="grow">${esc(r.name)}</span><span class="small muted">${esc(r.total_min)} Min</span></a>`).join('')}</section>`;
     }).join('');
-    return `${banner()}<div class="head"><h1>Rezepte</h1><p class="eyebrow">${T('Rezepte').length} Rezepte</p></div>
+    return `${banner()}<div class="head" style="--accent:var(--block-prep)"><h1>Rezepte</h1><p class="eyebrow">${T('Rezepte').length} Rezepte</p></div>
       <input class="field" id="search" type="search" placeholder="Suchen, z. B. Linsen oder schnell" value="${esc(state.search)}">
       <div id="rlist">${groups || '<p class="muted center">Nichts gefunden.</p>'}</div>
       <p class="small muted center" style="padding:0 12px">Neue Rezepte, auch von NYT Cooking: schick Claude im Chat den Link.</p>
@@ -390,7 +392,7 @@
     const ing = T('Zutaten').filter((z) => z.recipe_id === id);
     const steps = String(r.steps || '').split(/(?<=\.)\s+(?=[A-ZÄÖÜ])/).filter(Boolean);
     const isBite = r.category === 'bite';
-    return `<section class="block big ${mealClass(null, r)}">
+    return `<section class="block big hero-r ${mealClass(null, r)}">
         <a class="round sm" href="javascript:history.back()" aria-label="Zurück" style="margin-left:-8px">${I.left}</a>
         <span class="pill" style="margin-top:8px">${esc([mealLabel(null, r), r.source && r.source !== 'Claude' ? 'aus ' + r.source : ''].filter(Boolean).join(' · '))}</span>
         <h1 style="line-height:38px">${esc(r.name)}</h1>
