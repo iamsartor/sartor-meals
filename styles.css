@@ -18,7 +18,8 @@
   --block-ink: #171719;
   --block-ink-soft: #2e2f33;
   --nav-idle: #46474c;
-  --font: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, system-ui, 'Segoe UI', Roboto, sans-serif;
+  --font: Figtree, -apple-system, BlinkMacSystemFont, system-ui, 'Segoe UI', Roboto, sans-serif;
+  --font-display: 'Bricolage Grotesque', Figtree, -apple-system, system-ui, sans-serif;
   color-scheme: light dark;
 }
 @media (prefers-color-scheme: dark) {
@@ -155,3 +156,12 @@ nav.tabs a[aria-current="page"] span { background: var(--brand); color: #fff; }
 .tile.fridge .day { font-size: 14px; line-height: 20px; font-weight: 700; letter-spacing: 0; }
 .hero-r { border-radius: 8px 40px 40px 40px !important; }
 .head .textbtn { padding-left: 0; }
+
+/* display face: Bricolage Grotesque for titles, dish names and big numbers */
+h1, h2, .tile .day, .tile .meal, .choice .opt .t, .meta b, .btn { font-family: var(--font-display); }
+h1 { font-weight: 800; letter-spacing: -0.03em; font-variation-settings: 'opsz' 96; }
+h1.huge { font-size: 46px; line-height: 46px; }
+.tile .meal { font-weight: 700; letter-spacing: -0.01em; }
+.tile.s6 .day { font-weight: 800; font-variation-settings: 'opsz' 96; }
+.choice .opt .t { font-size: 28px; line-height: 32px; font-weight: 800; }
+.btn { font-weight: 700; letter-spacing: 0; }
