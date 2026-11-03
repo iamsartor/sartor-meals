@@ -303,7 +303,6 @@
     const prepRows = T('Plan').filter((p) => p.cook_on === prep || (p.slot === 'bite' && p.date === prep));
     const prepNames = [...new Set(prepRows.map((p) => recipe(p.recipe_id)).filter(Boolean).map((r) => r.name))];
     const fridge = T('Fertig').filter((f) => num(f.portions_left) > 0);
-    const words = prepNames.length ? [`${setting('prep_day', 'Sonntag')} ${fmt(prep)} vorkochen`].concat(prepNames) : ['Noch kein Vorkochen geplant', 'Sag Claude „Plan die Woche“'];
     return `${banner()}
       <header class="top">
         ${weekSwitch()}
@@ -314,7 +313,7 @@
         <span class="blob" style="${b1}"></span><span class="blob2" style="${b2}"></span>
         ${stageInner(d)}
       </section>
-      <a class="field marquee c-brand" href="${prepNames.length ? '#/vorkochen/' + prep : '#/woche'}" aria-label="${esc(words.join(', '))}"><span class="track" aria-hidden="true">${words.concat(words).concat(words).concat(words).map((w) => `<span>${esc(w)}</span>`).join('')}</span></a>
+      <a class="field prepband c-brand" href="${prepNames.length ? '#/vorkochen/' + prep : '#/woche'}"><span><b>${prepNames.length ? `${esc(setting('prep_day', 'Sonntag'))}, ${fmt(prep)}: vorkochen` : 'Noch kein Vorkochen geplant'}</b><small>${prepNames.length ? esc(prepNames.join(' · ')) : 'Sag Claude „Plan die Woche“'}</small></span>${prepNames.length ? I.next : ''}</a>
       <div class="section-title"><h2>Die ganze Woche</h2><span class="small muted">antippen</span></div>
       <div class="rows">${days.map((x, i) => `<button class="rowi${x.date === sel ? ' sel' : ''}${rise(i)}" data-act="sel" data-date="${x.date}" data-scroll="1"><span class="k">${dayShort(x.date)}</span><span class="v"><b>${x.r ? esc(x.r.name) : 'Noch offen'}</b><small>${esc(x.label)}${x.eve ? ' · abends ' + esc(x.eve.name) : ''}</small></span><span class="bar ${BAR(x.cls)}"></span></button>`).join('')}</div>
       <a class="field c-bites" href="#/kuehlschrank" style="display:block;text-decoration:none;margin-top:24px;padding:22px 20px">

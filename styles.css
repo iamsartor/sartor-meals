@@ -80,11 +80,10 @@ p { margin: 0; }
 @keyframes inL { from { opacity: 0; transform: translateX(40px); } to { opacity: 1; transform: none; } }
 @keyframes inR { from { opacity: 0; transform: translateX(-40px); } to { opacity: 1; transform: none; } }
 
-/* marquee band */
-.marquee { display: block; text-decoration: none; padding: 14px 0; white-space: nowrap; overflow: hidden; }
-.marquee .track { display: inline-flex; gap: 28px; animation: marquee 22s linear infinite; font-family: var(--display); font-weight: 800; font-size: 22px; letter-spacing: -0.01em; padding-left: 20px; }
-.marquee .track span::after { content: '✱'; margin-left: 28px; font-size: 16px; vertical-align: 3px; }
-@keyframes marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+/* prep band */
+.prepband { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 20px; text-decoration: none; }
+.prepband b { display: block; font-family: var(--display); font-weight: 800; font-size: 20px; letter-spacing: -0.01em; }
+.prepband small { display: block; font-size: 14px; font-weight: 600; opacity: .9; margin-top: 2px; }
 
 /* editorial rows */
 .rows { display: flex; flex-direction: column; }
@@ -194,5 +193,4 @@ nav.tabs a[aria-current="page"] { opacity: 1; }
 ::view-transition-old(root), ::view-transition-new(root) { animation-duration: .3s; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
-  .marquee .track { animation: none; }
 }
