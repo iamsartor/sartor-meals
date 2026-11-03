@@ -47,7 +47,7 @@
 
   const SECTIONS = ['Obst und Gemüse', 'Kühlregal', 'Fleisch und Fisch', 'Trockenes und Brot', 'Tiefkühl', 'Sonstiges'];
   const SECTION_BLOCK = { 'Obst und Gemüse': 'b-new', 'Kühlregal': 'b-prep', 'Fleisch und Fisch': 'b-warm', 'Trockenes und Brot': 'b-abendbrot', 'Tiefkühl': 'b-bites', 'Sonstiges': 'b-wish' };
-  const CHIPS = ['Warm und deftig', 'Frisch', 'Nudeln', 'Suppe', 'Reis', 'Kartoffeln', 'Was Süßes', 'Wenig Hunger', 'Großer Hunger'];
+  const CHIPS = ['Warm und deftig', 'Frisch', 'Nudeln', 'Suppe', 'Reis', 'Kartoffeln', 'Was Süßes'];
 
   function mealClass(row, r) {
     const t = tags(r);
