@@ -317,8 +317,8 @@
         ${stageInner(d)}
       </section>
       <a class="field prepband c-brand" href="${prepNames.length ? '#/vorkochen/' + prep : '#/woche'}"><span><b>${prepNames.length ? `${esc(setting('prep_day', 'Mittwoch'))}, ${fmt(prep)}: vorkochen` : 'Noch kein Vorkochen geplant'}</b><small>${prepNames.length ? esc(prepNames.join(' · ')) : 'Sag Claude „Plan die Woche“'}</small></span>${prepNames.length ? I.next : ''}</a>
-      <div class="section-title"><h2>Die ganze Woche</h2><span class="small muted">antippen</span></div>
-      <div class="rows">${days.map((x, i) => `<button class="rowi${x.date === sel ? ' sel' : ''}${rise(i)}" data-act="sel" data-date="${x.date}" data-scroll="1"><span class="k">${dayShort(x.date)}</span><span class="v"><b>${x.r ? esc(x.r.name) : 'Noch offen'}</b><small>${esc(x.label)}${x.eve ? ' · abends ' + esc(x.eve.name) : ''}</small></span><span class="bar ${BAR(x.cls)}"></span></button>`).join('')}</div>
+      <div class="section-title"><h2>Die ganze Woche</h2><span class="small muted">${canSwap() ? 'wischen = tauschen' : 'antippen'}</span></div>
+      <div class="rows">${days.map((x, i) => `<button class="rowi${x.date === sel ? ' sel' : ''}${rise(i)}" data-act="sel" data-date="${x.date}" data-scroll="1"${canSwap() ? ` data-swipe="1" data-slot="${x.row ? x.row.slot : 'main'}"` : ''}><span class="k">${dayShort(x.date)}</span><span class="mv"><span class="v"><b>${x.r ? esc(x.r.name) : 'Noch offen'}</b><small>${esc(x.label)}${x.eve ? ' · abends ' + esc(x.eve.name) : ''}</small></span><span class="bar ${BAR(x.cls)}"></span></span></button>`).join('')}</div>
       <a class="field c-bites" href="#/kuehlschrank" style="display:block;text-decoration:none;margin-top:24px;padding:22px 20px">
         <span class="eyebrow">Im Kühlschrank</span>
         <div style="display:flex;gap:22px;flex-wrap:wrap;margin-top:8px">${fridge.length ? fridge.slice(0, 4).map((f) => `<div><b class="disp" style="font-size:40px;line-height:40px;font-weight:800">${num(f.portions_left)}</b><div class="small" style="font-weight:700">${esc(f.item)}</div></div>`).join('') : '<b class="disp" style="font-size:28px">Gerade leer</b>'}</div>
@@ -666,6 +666,7 @@
   };
 
   root.addEventListener('click', (ev) => {
+    if (swallowClick) { swallowClick = false; ev.preventDefault(); return; }
     const el = ev.target.closest('[data-act]');
     if (!el || el.tagName === 'FORM' || el.type === 'checkbox') return;
     const fn = act[el.dataset.act]; if (fn) fn(el, ev);
@@ -689,6 +690,72 @@
     if (next < ws || next > addDays(ws, 6)) return;
     patchStage(next, dx < 0 ? 1 : -1);
   });
+
+  // ---------- swipe a day row to cycle through alternatives (Michael only) ----------
+  const canSwap = () => state.person === 'Michael';
+  const cyc = {};
+  function alternatives(date, slot, orig) {
+    const ws = curWeek(), we = addDays(ws, 6);
+    const used = new Set(T('Plan').filter((p) => p.date >= ws && p.date <= we && p.date !== date).map((p) => p.recipe_id));
+    const cat = slot === 'abendbrot' ? 'abendbrot' : 'main';
+    const alts = T('Rezepte').filter((r) => r.category === cat && r.id !== orig && !used.has(r.id) && r.active !== 'nein')
+      .sort((x, y) => (x.last_cooked || '').localeCompare(y.last_cooked || '') || num(y.rating) - num(x.rating)).map((r) => r.id);
+    return [orig || null].concat(alts);
+  }
+  function showAlt(el, c) {
+    const id = c.list[c.i], r = id && recipe(id);
+    const n = c.list.length - 1;
+    el.querySelector('.v b').textContent = r ? r.name : 'Noch offen';
+    el.querySelector('.v small').textContent = c.i === 0 ? 'wie geplant' : `Vorschlag ${c.i} von ${n}`;
+    el.querySelector('.bar').className = 'bar ' + BAR(r ? mealClass({ slot: c.slot }, r) : 'b-empty');
+  }
+  function stepRow(el, dir) {
+    const date = el.dataset.date;
+    const row = T('Plan').find((p) => p.date === date && p.slot === el.dataset.slot);
+    const c = cyc[date] || (cyc[date] = { slot: el.dataset.slot, orig: row ? row.recipe_id : null, i: 0 });
+    c.list = c.list || alternatives(date, c.slot, c.orig);
+    if (c.list.length < 2) { toast('Keine Alternativen im Rezeptvorrat'); return; }
+    c.i = (c.i + dir + c.list.length) % c.list.length;
+    const mv = el.querySelector('.mv');
+    const out = () => {
+      showAlt(el, c);
+      mv.style.transition = 'none'; mv.style.transform = `translateX(${dir * 60}%)`; mv.style.opacity = '0';
+      void mv.offsetWidth;
+      mv.style.transition = ''; mv.style.transform = ''; mv.style.opacity = '';
+    };
+    if (reduced()) out(); else { mv.style.transition = 'transform .16s ease-in, opacity .16s ease-in'; mv.style.transform = `translateX(${-dir * 60}%)`; mv.style.opacity = '0'; setTimeout(out, 160); }
+    clearTimeout(c.t);
+    c.t = setTimeout(() => commitRow(date), 1600);
+  }
+  function commitRow(date) {
+    const c = cyc[date]; delete cyc[date];
+    if (!c) return;
+    const id = c.list[c.i];
+    if (id === c.orig) { render(); return; }
+    const r = id && recipe(id);
+    if (!r) { save([{ op: 'delete', tab: 'Plan', match: { date, slot: c.slot } }]); return; }
+    save([{ op: 'replace', tab: 'Plan', match: { date, slot: c.slot }, rows: [{ date, slot: c.slot, recipe_id: r.id, servings: setting('household', r.servings), cook_on: '', note: '' }] }]);
+    toast(`${dayLong(date)}: ${r.name}`);
+  }
+  let rw = null, swallowClick = false;
+  root.addEventListener('pointerdown', (ev) => { const el = ev.target.closest('[data-swipe]'); rw = el ? { el, x: ev.clientX, y: ev.clientY, drag: false } : null; });
+  root.addEventListener('pointermove', (ev) => {
+    if (!rw) return;
+    const dx = ev.clientX - rw.x, dy = ev.clientY - rw.y;
+    if (!rw.drag) { if (Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy) * 1.3) rw.drag = true; else if (Math.abs(dy) > 10) { rw = null; return; } else return; }
+    const mv = rw.el.querySelector('.mv'); mv.style.transition = 'none'; mv.style.transform = `translateX(${dx}px)`; mv.style.opacity = String(Math.max(0.3, 1 - Math.abs(dx) / 300));
+  });
+  const endSwipe = (ev) => {
+    if (!rw) return;
+    const { el, x, drag } = rw; rw = null;
+    if (!drag) return;
+    swallowClick = true; setTimeout(() => { swallowClick = false; }, 300);
+    const dx = ev.clientX - x, mv = el.querySelector('.mv');
+    if (Math.abs(dx) > 60 && ev.type === 'pointerup') stepRow(el, dx < 0 ? 1 : -1);
+    else { mv.style.transition = ''; mv.style.transform = ''; mv.style.opacity = ''; }
+  };
+  root.addEventListener('pointerup', endSwipe);
+  root.addEventListener('pointercancel', endSwipe);
 
   // ---------- setup link: #setup?p=<firebase project id>&h=<household secret> ----------
   function readSetup() {

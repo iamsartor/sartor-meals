@@ -89,6 +89,8 @@ p { margin: 0; }
 .rows { display: flex; flex-direction: column; }
 .rowi { position: relative; display: flex; align-items: center; gap: 16px; padding: 14px 20px 14px 20px; border: none; border-bottom: 1px solid var(--line); background: none; text-align: left; text-decoration: none; width: 100%; cursor: pointer; color: inherit; }
 .rowi .k { font-family: var(--display); font-size: 26px; line-height: 28px; font-weight: 800; width: 44px; flex-shrink: 0; }
+.rowi[data-swipe] { touch-action: pan-y; user-select: none; overflow: hidden; }
+.rowi .mv { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 16px; align-self: stretch; transition: transform .3s var(--spring), opacity .2s ease-out; }
 .rowi .v { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .rowi .v b { font-size: 17px; line-height: 22px; font-weight: 700; }
 .rowi .v small { font-size: 13px; color: var(--text-2); }
