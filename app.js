@@ -1,4 +1,4 @@
-/* Sartor Meals: a small family meal planner. Data lives in a Google Sheet via an Apps Script connector. */
+/* Sartor Meals: a small family meal planner. Data lives in Firebase Firestore (REST, no SDK). */
 (() => {
   'use strict';
 
@@ -78,8 +78,8 @@
   };
 
   // ---------- data sync ----------
-  function applyLocal(op) {
-    const d = state.data;
+  function applyLocal(op) { applyTo(state.data, op); }
+  function applyTo(d, op) {
     const rows = d[op.tab] || (d[op.tab] = []);
     const m = (r) => Object.keys(op.match || {}).every((k) => String(r[k]) === String(op.match[k]));
     if (op.op === 'append') rows.push(...op.rows.map((r) => ({ ...r })));
@@ -88,49 +88,99 @@
     else if (op.op === 'update') rows.forEach((r) => { if (m(r)) Object.assign(r, op.set); });
   }
 
-  async function call(body) {
-    const res = await fetch(state.cfg.url, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ key: state.cfg.key, ...body }) });
-    const j = await res.json();
-    if (!j.ok) throw new Error(j.error || 'Fehler');
-    return j.data;
+  // Firestore REST: one document per tab at h/<household>/tabs/<Tab>, rows stored as a JSON string.
+  // The household id is the secret; Firestore rules only open that one path.
+  const FS = () => `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(state.cfg.p)}/databases/(default)/documents/h/${encodeURIComponent(state.cfg.h)}/tabs`;
+  const tabName = (doc) => decodeURIComponent(doc.name.split('/').pop());
+  const rowsOf = (doc) => { try { return JSON.parse((doc.fields && doc.fields.rows && doc.fields.rows.stringValue) || '[]'); } catch (e) { return []; } };
+
+  async function fetchAll() {
+    const out = {}; let token = '';
+    do {
+      const res = await fetch(`${FS()}?pageSize=100${token ? '&pageToken=' + encodeURIComponent(token) : ''}`);
+      if (!res.ok) throw new Error('read ' + res.status);
+      const j = await res.json();
+      (j.documents || []).forEach((doc) => { out[tabName(doc)] = rowsOf(doc); });
+      token = j.nextPageToken || '';
+    } while (token);
+    return out;
   }
 
-  async function save(ops) {
+  async function fetchTab(tab) {
+    const res = await fetch(`${FS()}/${encodeURIComponent(tab)}`);
+    if (res.status === 404) return { rows: [], time: null };
+    if (!res.ok) throw new Error('read ' + res.status);
+    const doc = await res.json();
+    return { rows: rowsOf(doc), time: doc.updateTime };
+  }
+
+  // Write a whole tab, but only if nobody changed it since we read it (else the caller retries).
+  async function putTab(tab, rows, time) {
+    const pre = time ? `currentDocument.updateTime=${encodeURIComponent(time)}` : 'currentDocument.exists=false';
+    const res = await fetch(`${FS()}/${encodeURIComponent(tab)}?${pre}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fields: { rows: { stringValue: JSON.stringify(rows) } } }),
+    });
+    if (res.ok) return true;
+    if ([400, 404, 409, 412].includes(res.status)) return false;
+    throw new Error('write ' + res.status);
+  }
+
+  // Apply ops to the server copy of each tab: read, change, write with precondition, retry on conflict.
+  async function pushOps(ops) {
+    const tabs = [...new Set(ops.map((o) => o.tab))];
+    for (const tab of tabs) {
+      const mine = ops.filter((o) => o.tab === tab);
+      for (let attempt = 0; ; attempt++) {
+        const cur = await fetchTab(tab);
+        const tmp = { [tab]: cur.rows };
+        mine.forEach((o) => applyTo(tmp, o));
+        if (await putTab(tab, tmp[tab], cur.time)) { state.data[tab] = tmp[tab]; break; }
+        if (attempt >= 4) throw new Error('conflict');
+      }
+    }
+  }
+
+  let saving = Promise.resolve();
+  function save(ops) {
     ops.forEach(applyLocal);
     LS.set('sm.data', state.data);
     render();
     if (!state.cfg) return;
-    try {
-      state.data = await call({ ops });
-      LS.set('sm.data', state.data);
-      state.error = '';
-    } catch (e) {
-      state.error = 'Speichern hat nicht geklappt. Bitte später neu laden.';
-      toast(state.error);
-    }
-    render();
+    saving = saving.then(async () => {
+      try {
+        await pushOps(ops);
+        LS.set('sm.data', state.data);
+        state.error = '';
+      } catch (e) {
+        state.error = 'Speichern hat nicht geklappt. Bitte später neu laden.';
+        toast(state.error);
+      }
+      render();
+    });
   }
 
-  async function load() {
+  async function load(quiet) {
     if (!state.cfg) {
       if (!state.data) { state.data = await seedData(); }
       render();
       return;
     }
     state.syncing = true;
-    render();
+    if (!quiet) render();
     try {
-      let data = await call({ ops: [] });
+      await saving;
+      let data = await fetchAll();
       if (!data.Rezepte) {
         const seed = await (await fetch('seed.json')).json();
-        data = await call({ ops: seed.map((t) => ({ op: 'ensure', tab: t.tab, headers: t.headers, rows: t.rows })).concat([{ op: 'dropDefault' }]) });
-        toast('Tabelle eingerichtet');
+        for (const t of seed) { if (!data[t.tab]) { await putTab(t.tab, t.rows, null); data[t.tab] = t.rows; } }
+        toast('Daten eingerichtet');
       }
       state.data = data;
       LS.set('sm.data', data);
       state.error = '';
     } catch (e) {
-      state.error = 'Keine Verbindung zur Tabelle. Zeige den letzten Stand.';
+      state.error = 'Keine Verbindung. Zeige den letzten Stand.';
       if (!state.data) state.data = await seedData();
     }
     state.syncing = false;
@@ -208,7 +258,7 @@
 
   function banner() {
     if (state.error) return `<p class="notice" style="background:var(--wish);color:var(--ink)">${esc(state.error)}</p>`;
-    if (!state.cfg) return `<p class="notice">Vorschau mit Beispieldaten. Änderungen bleiben auf diesem Gerät, bis die App mit der Tabelle verbunden ist.</p>`;
+    if (!state.cfg) return `<p class="notice">Vorschau mit Beispieldaten. Änderungen bleiben auf diesem Gerät, bis die App verbunden ist.</p>`;
     return '';
   }
 
@@ -338,7 +388,7 @@
     const cols = ['c-prep', 'c-abendbrot', 'c-wish', 'c-new', 'c-bites', 'c-warm'];
     return `<header class="top"><h1>Wer<br>bist du?</h1><p class="muted">Einmal antippen, die App merkt es sich auf diesem Handy.</p></header>
       ${people.map((p, i) => `<button class="field ${cols[i % 6]} half${rise(i)}" style="width:100%;min-height:120px" data-act="person" data-p="${esc(p)}"><span class="t">${esc(p)}</span></button>`).join('')}
-      <p class="small muted" style="padding:16px 20px">Namen ändern: in der Tabelle im Tab „Familie“, oder Claude im Chat fragen.</p>${nav('lieber')}`;
+      <p class="small muted" style="padding:16px 20px">Namen ändern: einfach Claude im Chat fragen.</p>${nav('lieber')}`;
   }
 
   function lieberWeek() {
@@ -491,7 +541,7 @@
   function vEinstellungen() {
     return `<header class="top"><a class="back" href="#/woche">${I.left} Woche</a><h1>Einstel&shy;lungen</h1></header>
       <div class="prose"><h2>Ich bin</h2><p>${state.person ? esc(state.person) : 'Noch nicht gewählt'}</p><div><a class="btn ghost" href="#/wer">Person wechseln</a></div></div>
-      <div class="prose" style="margin-top:14px"><h2>Verbindung</h2><p>${state.cfg ? 'Mit der Google-Tabelle verbunden.' : 'Nicht verbunden: die App zeigt Beispieldaten. Öffne den Einrichtungslink, um sie zu verbinden.'}</p>
+      <div class="prose" style="margin-top:14px"><h2>Verbindung</h2><p>${state.cfg ? 'Verbunden. Alle Handys der Familie sehen dieselben Daten.' : 'Nicht verbunden: die App zeigt Beispieldaten. Öffne den Einrichtungslink, um sie zu verbinden.'}</p>
         <div style="display:flex;gap:8px;flex-wrap:wrap">${state.cfg ? '<button class="btn ghost" data-act="reload">Neu laden</button><button class="link" data-act="disconnect">Verbindung trennen</button>' : ''}</div></div>
       <p class="small muted pad" style="margin-top:24px">Sartor Meals · Farben aus Montage (Wanted Lab, MIT) · Schriften Bricolage Grotesque und Figtree</p>
       ${nav('woche')}`;
@@ -639,22 +689,24 @@
     patchStage(next, dx < 0 ? 1 : -1);
   });
 
-  // ---------- setup link: #setup?u=<script url>&k=<key> ----------
+  // ---------- setup link: #setup?p=<firebase project id>&h=<household secret> ----------
   function readSetup() {
     const m = location.hash.match(/^#setup\?(.*)$/);
     if (!m) return false;
-    const p = new URLSearchParams(m[1]);
-    const u = p.get('u'), k = p.get('k');
-    if (u && k && /^https:\/\/script\.google\.com\//.test(u)) {
-      state.cfg = { url: u, key: k }; LS.set('sm.cfg', state.cfg); LS.del('sm.data'); state.data = null;
-      history.replaceState(null, '', location.pathname + '#/woche');
-      setTimeout(() => toast('Verbunden mit der Tabelle'), 400);
+    const q = new URLSearchParams(m[1]);
+    const p = q.get('p'), h = q.get('h');
+    if (p && h && /^[a-z0-9-]{4,40}$/.test(p) && /^[A-Za-z0-9]{16,64}$/.test(h)) {
+      state.cfg = { p, h }; LS.set('sm.cfg', state.cfg); LS.del('sm.data'); state.data = null;
+      setTimeout(() => toast('Verbunden'), 400);
     }
+    history.replaceState(null, '', location.pathname + '#/woche');
     return true;
   }
 
   window.addEventListener('hashchange', () => { if (readSetup()) { load(); return; } go(); });
   readSetup();
+  if (state.cfg && !state.cfg.p) { LS.del('sm.cfg'); state.cfg = null; }
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && state.cfg) load(true); });
   root.classList.add('anim'); setTimeout(() => root.classList.remove('anim'), 1500);
   load();
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
