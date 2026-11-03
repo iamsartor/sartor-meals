@@ -26,7 +26,10 @@
   const parse = (s) => { const [y, m, d] = String(s).split('-').map(Number); return new Date(y, (m || 1) - 1, d || 1); };
   const addDays = (s, n) => { const d = parse(s); d.setDate(d.getDate() + n); return iso(d); };
   const today = () => iso(new Date());
-  const weekStart = (s) => { const d = parse(s); const wd = (d.getDay() + 6) % 7; d.setDate(d.getDate() - wd); return iso(d); };
+  // The plan week starts on the shopping/cooking day (setting prep_day, default Mittwoch) and runs 7 days.
+  const WDAY = { Sonntag: 0, Montag: 1, Dienstag: 2, Mittwoch: 3, Donnerstag: 4, Freitag: 5, Samstag: 6 };
+  const prepWd = () => { const v = state.data ? setting('prep_day', 'Mittwoch') : 'Mittwoch'; return v in WDAY ? WDAY[v] : 3; };
+  const weekStart = (s) => { const d = parse(s); const wd = (d.getDay() - prepWd() + 7) % 7; d.setDate(d.getDate() - wd); return iso(d); };
   const DAY = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
   const DAYLONG = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'];
   const MON = ['Jan', 'Feb', 'März', 'Apr', 'Mai', 'Juni', 'Juli', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'];
@@ -203,7 +206,7 @@
     return Math.ceil(q - 0.01);
   }
   function generateList(ws) {
-    const from = addDays(ws, -1), to = addDays(ws, 6);
+    const from = ws, to = addDays(ws, 6);
     const plan = T('Plan').filter((p) => p.date >= from && p.date <= to);
     const staple = (name) => T('Vorrat').find((v) => v.item.toLowerCase() === name.toLowerCase());
     const agg = new Map();
@@ -299,7 +302,7 @@
     const days = Array.from({ length: 7 }, (_, i) => dayInfo(addDays(ws, i)));
     const d = days[idx];
     const [b1, b2] = blobStyle(idx);
-    const prep = addDays(ws, -1);
+    const prep = ws;
     const prepRows = T('Plan').filter((p) => p.cook_on === prep || (p.slot === 'bite' && p.date === prep));
     const prepNames = [...new Set(prepRows.map((p) => recipe(p.recipe_id)).filter(Boolean).map((r) => r.name))];
     const fridge = T('Fertig').filter((f) => num(f.portions_left) > 0);
@@ -313,7 +316,7 @@
         <span class="blob" style="${b1}"></span><span class="blob2" style="${b2}"></span>
         ${stageInner(d)}
       </section>
-      <a class="field prepband c-brand" href="${prepNames.length ? '#/vorkochen/' + prep : '#/woche'}"><span><b>${prepNames.length ? `${esc(setting('prep_day', 'Sonntag'))}, ${fmt(prep)}: vorkochen` : 'Noch kein Vorkochen geplant'}</b><small>${prepNames.length ? esc(prepNames.join(' · ')) : 'Sag Claude „Plan die Woche“'}</small></span>${prepNames.length ? I.next : ''}</a>
+      <a class="field prepband c-brand" href="${prepNames.length ? '#/vorkochen/' + prep : '#/woche'}"><span><b>${prepNames.length ? `${esc(setting('prep_day', 'Mittwoch'))}, ${fmt(prep)}: vorkochen` : 'Noch kein Vorkochen geplant'}</b><small>${prepNames.length ? esc(prepNames.join(' · ')) : 'Sag Claude „Plan die Woche“'}</small></span>${prepNames.length ? I.next : ''}</a>
       <div class="section-title"><h2>Die ganze Woche</h2><span class="small muted">antippen</span></div>
       <div class="rows">${days.map((x, i) => `<button class="rowi${x.date === sel ? ' sel' : ''}${rise(i)}" data-act="sel" data-date="${x.date}" data-scroll="1"><span class="k">${dayShort(x.date)}</span><span class="v"><b>${x.r ? esc(x.r.name) : 'Noch offen'}</b><small>${esc(x.label)}${x.eve ? ' · abends ' + esc(x.eve.name) : ''}</small></span><span class="bar ${BAR(x.cls)}"></span></button>`).join('')}</div>
       <a class="field c-bites" href="#/kuehlschrank" style="display:block;text-decoration:none;margin-top:24px;padding:22px 20px">
