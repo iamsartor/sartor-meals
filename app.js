@@ -419,8 +419,7 @@
           <button class="field half c-warm" data-act="answer" data-q="${q.id}" data-c="a"><span class="t">${esc(a ? a.name : q.option_a)}</span><span class="m">${meta(a)}</span></button>
           <span class="or" aria-hidden="true">oder</span>
           <button class="field half c-new" data-act="answer" data-q="${q.id}" data-c="b"><span class="t">${esc(b ? b.name : q.option_b)}</span><span class="m">${meta(b)}</span></button>
-        </div>
-        <div style="text-align:center;padding-top:6px"><button class="link" data-act="answer" data-q="${q.id}" data-c="egal">Egal, beides gut</button></div>`;
+        </div>`;
     } else {
       main = `<header class="top"><div class="top-row"><a class="link" href="#/wer">${esc(state.person)}</a></div>${progress}<h1 class="rise" style="--i:0;margin-top:8px">Danke!</h1><p class="muted">${qs.length ? 'Alles beantwortet. Claude plant damit die Woche.' : 'Gerade keine Fragen. Neue kommen, wenn die nächste Woche geplant wird.'}</p></header>`;
     }
